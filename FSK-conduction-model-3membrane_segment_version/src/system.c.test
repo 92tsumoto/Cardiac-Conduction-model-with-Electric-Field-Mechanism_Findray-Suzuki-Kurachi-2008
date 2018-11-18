@@ -1,0 +1,605 @@
+
+#include "syspara.h"
+
+inline void function(int site, int patch, double t)
+{
+
+	comp_ina(site,patch);
+	comp_ical(site,patch);
+	comp_icat(site,patch);
+	comp_ikr(site,patch);
+	comp_iks(site,patch);
+	comp_iki(site,patch);
+	comp_ikp(site,patch);
+	comp_ito(site,patch);
+	comp_inaca(site,patch);
+	comp_inak(site,patch);
+	comp_ipca(site,patch);
+	comp_icab(site,patch);
+	comp_inab(site,patch);
+
+	var.INa_total[site][patch] = var.ina[site][patch] 
+							+ var.inab[site][patch] 
+							+ var.ilcana[site][patch]
+							+ 3.0*var.inak[site][patch]
+							+ 3.0*var.inaca[site][patch];
+	var.ICa_total[site][patch] = var.ilca[site][patch]
+							+ var.icab[site][patch]
+							+ var.ipca[site][patch]
+							- 2.0*var.inaca[site][patch] 
+							+ var.icat[site][patch];
+	
+	if (site == 0 && patch == 1){
+		var.IK_total[site][patch] = var.ikr[site][patch] 
+							+ var.iks[site][patch] + var.iki[site][patch] + var.ikp[site][patch]
+							+ var.ilcak[site][patch] - 2.0*var.inak[site][patch]
+							+ var.ito[site][patch] + var.Istim;
+	} else {	
+		var.IK_total[site][patch] = var.ikr[site][patch] 
+							+ var.iks[site][patch] + var.iki[site][patch] + var.ikp[site][patch]
+							+ var.ilcak[site][patch] - 2.0*var.inak[site][patch] + var.ito[site][patch];
+	}	
+	
+	comp_iconcent(site,patch);
+
+	var.k1[0][site][patch] = -(var.INa_total[site][patch]+var.IK_total[site][patch]+var.ICa_total[site][patch]);
+	var.k1[1][site][patch] = var.am*(1.0 - var.u[1][site][patch]) - var.bm*var.u[1][site][patch]; // m
+	var.k1[2][site][patch] = var.ah*(1.0 - var.u[2][site][patch]) - var.bh*var.u[2][site][patch]; // h
+	var.k1[3][site][patch] = var.aj*(1.0 - var.u[3][site][patch]) - var.bj*var.u[3][site][patch]; // j
+	var.k1[4][site][patch] = (var.dss - var.u[4][site][patch])/var.taud;	// dss
+	var.k1[5][site][patch] = (var.fss1 - var.u[5][site][patch])/var.tauf1;	// fss1
+	var.k1[6][site][patch] = (var.fss2 - var.u[6][site][patch])/var.tauf2;	// fss2
+	var.k1[7][site][patch] = (var.fcass1 - var.u[7][site][patch])/var.fcatau1;	//fcass1
+	var.k1[8][site][patch] = (var.fcass2 - var.u[8][site][patch])/var.fcatau2;	//fcass2
+	var.k1[9][site][patch] = (var.bss - var.u[9][site][patch])/var.taub;         //bss
+	var.k1[10][site][patch] = (var.gss - var.u[10][site][patch])/var.taug;         //gss
+	var.k1[11][site][patch] = (var.xrss - var.u[11][site][patch])/var.tauxr;       //xrss
+	var.k1[12][site][patch] = (var.xs1ss - var.u[12][site][patch])/var.tauxs1;		//xs1ss
+	var.k1[13][site][patch] = (var.xs2ss - var.u[13][site][patch])/var.tauxs2;		//xs2ss
+	var.k1[14][site][patch] = var.azdv*(1.0 - var.u[14][site][patch]) - var.bzdv*var.u[14][site][patch];
+	var.k1[15][site][patch] = var.aydv*(1.0 - var.u[15][site][patch]) - var.bydv*var.u[15][site][patch];
+	var.k1[16][site][patch] = -(var.INa_total[site][patch]*var.acap[patch])/(var.vmyo[patch]*var.zna*F);
+	var.k1[17][site][patch] = -(var.IK_total[site][patch]*var.acap[patch])/(var.vmyo[patch]*var.zk*F);
+	var.k1[18][site][patch] = -(((var.ICa_total[site][patch]*var.acap[patch])/(var.vmyo[patch]*var.zca*F))
+			+((var.iup[site][patch]-var.ileak[site][patch])*var.vnsr[patch]/var.vmyo[patch])
+			-(var.Irel_cicr[site][patch]*var.vjsr[patch]/var.vmyo[patch])
+			-(var.Irel_jsr_overload[site][patch]*var.vjsr[patch]/var.vmyo[patch]));
+	var.k1[19][site][patch] = var.iup[site][patch] - var.ileak[site][patch] - var.itr[site][patch]*var.vjsr[patch]/var.vnsr[patch];
+	var.k1[20][site][patch] = var.itr[site][patch] - var.Irel_cicr[site][patch] - var.Irel_jsr_overload[site][patch];
+	var.k1[21][site][patch] = (var.Na_bulk - var.u[21][site][patch])/var.tau_diff + var.INa_total[site][patch]*var.acap[patch]/(var.vcleft[patch]*F);
+	var.k1[22][site][patch] = (var.K_bulk - var.u[22][site][patch])/var.tau_diff + var.IK_total[site][patch]*var.acap[patch]/(var.vcleft[patch]*F);
+	var.k1[23][site][patch] = (var.Ca_bulk - var.u[23][site][patch])/var.tau_diff + var.ICa_total[site][patch]*var.acap[patch]/(var.vcleft[patch]*var.zca*F);
+
+}
+
+// Fast Sodium Current (time dependant) */
+inline void comp_ina(int site, int patch)
+{
+
+	MKL_INT iV=0, iNa=0;
+	double V1,V2,d1,d2;
+	double Na1,Na2,k1,k2;
+	V1 = (var.u[0][site][patch]+200)*dvm;
+	V2 = (int)V1;
+	d1 = V1-V2;
+	d2 = 1.0-d1;
+	iV = (int)V2;
+
+	var.am = var.Tam[iV]*d2 + var.Tam[iV+1]*d1;
+	var.bm = var.Tbm[iV]*d2 + var.Tbm[iV+1]*d1;
+	var.ah = var.Tah[iV]*d2 + var.Tah[iV+1]*d1;
+	var.bh = var.Tbh[iV]*d2 + var.Tbh[iV+1]*d1;
+	var.aj = var.Taj[iV]*d2 + var.Taj[iV+1]*d1;
+	var.bj = var.Tbj[iV]*d2 + var.Tbj[iV+1]*d1;
+
+	Na1 = (var.u[16][site][patch])*dvm;
+	Na2 = (int)Na1;
+	k1 = Na1-Na2;
+	k2 = 1.0-k1;
+	iNa = (int)Na2;
+	
+	//var.Ena[site][patch] = var.TEna[iNa]*k2 + var.TEna[iNa+1]*k1;
+	var.Ena[site][patch] = var.RTonF*log(var.u[21][site][patch]/var.u[16][site][patch]);
+
+
+	var.ina[site][patch] = var.gna_local[site][patch]*
+							var.u[1][site][patch]*var.u[1][site][patch]*var.u[1][site][patch]*
+							var.u[2][site][patch]*var.u[3][site][patch]*(var.u[0][site][patch]-var.Ena[site][patch]);
+
+}
+
+// L-type calcium current
+inline void comp_ical(int site, int patch)
+{
+
+	MKL_INT iV=0;
+	double V1,V2,d1,d2;
+	double expCa;
+
+	double f;   // VDI variable
+	double fca; // CDI variable
+
+	V1 = (var.u[0][site][patch]+200)*dvm;
+	V2 = (int)V1;
+	d1 = V1-V2;
+	d2 = 1.0-d1;
+	iV = (int)V2;
+
+	var.dss = var.Tdss[iV]*d2 + var.Tdss[iV+1]*d1;
+    var.taud = var.Ttaud[iV]*d2 + var.Ttaud[iV+1]*d1;
+	var.fss1= var.Tfss1[iV]*d2 + var.Tfss1[iV+1]*d1;
+	var.fss2= var.Tfss2[iV]*d2 + var.Tfss2[iV+1]*d1;
+	var.tauf1= var.Ttauf1[iV]*d2 + var.Ttauf1[iV+1]*d1;
+	var.tauf2= var.Ttauf2[iV]*d2 + var.Ttauf2[iV+1]*d1;
+
+	f = 0.100+0.524*var.u[5][site][patch]+0.376*var.u[6][site][patch];
+
+	expCa = var.TexpCa[iV]*d2 + var.TexpCa[iV+1]*d1;
+
+	if(fabs(var.u[0][site][patch]) > 0.001) {   // NaN will be occured at v=0
+		var.ibarca[site][patch] = var.ratgca*var.pca*var.zca*var.zca*
+			((var.u[0][site][patch]*F*F)/(R*T))*((var.gacai*var.u[18][site][patch]*expCa-var.gacao*var.u[23][site][patch])/(expCa-1.0));
+		var.ibarna[site][patch] = 0;
+
+		if(var.ibarca[site][patch] < 0.0) {
+			var.ibark[site][patch] = var.ratgca*540*var.pca*var.u[0][site][patch]/(1.0-var.ibarca[site][patch]/(1.227*var.ratgca));
+		 }else{
+			var.ibark[site][patch] = var.ratgca*540*var.pca*var.u[0][site][patch];
+		 }
+	 }
+	 else {
+		 var.ibarca[site][patch] = var.ratgca*var.pca*var.zca*F*(
+		 	var.gacai*var.u[18][site][patch]*(1.0+(var.zca*var.u[0][site][patch]*F)/(R*T))-var.gacao*var.u[23][site][patch]);
+		 var.ibarna[site][patch] = 0;
+		 var.ibark[site][patch] = var.ratgca*540*var.pca*var.u[0][site][patch]/(1.0-var.ibarca[site][patch]/(1.227*var.ratgca));
+	 }
+
+	var.ilcarat[site][patch]=var.u[8][site][patch]*var.u[8][site][patch]*var.fcarat/(var.u[8][site][patch]*var.u[8][site][patch]*var.fcarat+var.u[7][site][patch]*var.u[7][site][patch]*(1.0-var.fcarat));
+
+	var.fcatau1=1.0/(-var.aCDI*var.ilca[site][patch]*(1.0-var.ilcarat[site][patch]) + var.bCDI);
+	var.fcatau2=1.0/(-var.aCDI*var.ilca[site][patch]*var.ilcarat[site][patch] + var.bCDI);
+	var.fcass1=var.bCDI*var.fcatau1;
+	var.fcass2=var.bCDI*var.fcatau2;
+
+	fca=var.u[7][site][patch]*var.u[7][site][patch]*(1.0-var.fcarat)+var.u[8][site][patch]*var.u[8][site][patch]*var.fcarat;
+
+	var.ilca[site][patch] = var.u[4][site][patch]*f*fca*var.ibarca[site][patch];
+	var.ilcana[site][patch] = var.u[4][site][patch]*f*fca*var.ibarna[site][patch];
+	var.ilcak[site][patch] = var.u[4][site][patch]*f*fca*var.ibark[site][patch];
+
+}
+
+
+// Current through T-type Ca Channel */
+inline void comp_icat(int site, int patch)
+{
+
+	MKL_INT iV=0;
+	double V1,V2,d1,d2;
+
+	V1 = (var.u[0][site][patch]+200)*dvm;
+	V2 = (int)V1;
+	d1 = V1-V2;
+	d2 = 1.0-d1;
+	iV = (int)V2;
+
+	var.bss = var.Tbss[iV]*d2 + var.Tbss[iV+1]*d1;
+	var.taub = var.Ttaub[iV]*d2 + var.Ttaub[iV+1]*d1;
+	var.gss = var.Tgss[iV]*d2 + var.Tgss[iV+1]*d1;
+	var.taug = var.Ttaug[iV]*d2 + var.Ttaug[iV+1]*d1;
+	
+	var.Eca[site][patch] = (R*T/(var.zca*F))*log(var.u[23][site][patch]/var.u[18][site][patch]); // [Ca]i = x[18],[Ca]o = x[23]
+
+	var.icat[site][patch] = var.gcat*var.u[9][site][patch]*var.u[9][site][patch]*var.u[10][site][patch]*(var.u[0][site][patch]-var.Eca[site][patch]);
+
+}
+
+// Potassium Current (time-independant) Ik1
+inline void comp_iki (int site, int patch)
+{
+	
+	MKL_INT iV=0,iK=0;   
+	double V1,V2,d1,d2;
+	double K1,K2,dd1,dd2;
+	double p1,p2,p3,p4,q1,q2,q3,q4;
+	double aki,bki,kin,Eki;
+
+	V1 = (var.u[0][site][patch]+200)*dvm;
+	V2 = (int)V1;
+	d1 = V1-V2;
+	d2 = 1.0-d1;
+	iV = (int)V2;
+	p1 = var.T1Ki[iV]*d2 + var.T1Ki[iV+1]*d1;
+	p2 = var.T2Ki[iV]*d2 + var.T2Ki[iV+1]*d1;
+	p3 = var.T3Ki[iV]*d2 + var.T3Ki[iV+1]*d1;
+	p4 = var.T4Ki[iV]*d2 + var.T4Ki[iV+1]*d1;
+
+	//K1 = var.u[17][site][patch]*dvm;
+	//K2 = (int)K1;
+	//dd1 = K1-K2;
+	//dd2 = 1.0-dd1;
+	//iK = (int)K2;
+	//q1 = var.T5Ki[iK]*dd2 + var.T5Ki[iK+1]*dd1;
+	//q2 = var.T6Ki[iK]*dd2 + var.T6Ki[iK+1]*dd1;
+	//q3 = var.T7Ki[iK]*dd2 + var.T7Ki[iK+1]*dd1;
+	//q4 = var.T8Ki[iK]*dd2 + var.T8Ki[iK+1]*dd1;
+	Eki=log(var.u[22][site][patch]/var.u[17][site][patch]);
+	q1 = exp(-0.2385*var.RTonF*Eki);
+	q2 = exp(-0.08032*var.RTonF*Eki);
+	q3 = exp(-0.06175*var.RTonF*Eki);
+	q4 = exp(0.5143*var.RTonF*Eki);
+	//aki = 1.02/(1.0+exp(0.2385*(var.u[0][site][patch]-var.Eki[site][patch]-59.215)));
+	//bki = (0.49124*exp(0.08032*(var.u[0][site][patch]-var.Eki[site][patch]+5.476))
+	//		+exp(0.06175*(var.u[0][site][patch]-var.Eki[site][patch]-594.31)))/(1.0+exp(-0.5143*(var.u[0][site][patch]-var.Eki[site][patch]+4.753)));
+	
+	var.aki = 1.02/(1.0+p1*q1*var.c1_ki);
+	var.bki = (0.49124*p2*q2*var.c2_ki+p3*q3*var.c3_ki)/(1.0+p4*q4*var.c4_ki);
+
+	kin = var.aki/(var.aki+var.bki);
+	var.gki = 0.75*sqrt(var.u[22][site][patch]/5.4);
+	var.iki[site][patch] = var.gki*kin*(var.u[0][site][patch]-var.Ekr[site][patch]);
+
+}
+
+// Rapidly Activating Potassium Current 
+inline void comp_ikr (int site, int patch)
+{
+
+	MKL_INT iV=0,iK=0;   
+	double V1,V2,d1,d2;
+	double K1,K2,dd1,dd2;
+	V1 = (var.u[0][site][patch]+200)*dvm;
+	V2 = (int)V1;
+	d1 = V1-V2;
+	d2 = 1.0-d1;
+	iV = (int)V2;
+
+	var.xrss = var.Txrss[iV]*d2 + var.Txrss[iV+1]*d1;
+	var.tauxr = var.Ttauxr[iV]*d2 + var.Ttauxr[iV+1]*d1;
+	var.r = var.Tr[iV]*d2 + var.Tr[iV+1]*d1;
+	
+	//K1 = var.u[17][site][patch]*dvm;
+	//K2 = (int)K1;
+	//dd1 = K1-K2;
+	//dd2 = 1.0-dd1;
+	//iK = (int)K2;
+	//var.Ekr[site][patch] = var.TEk[iK]*dd2 + var.TEk[iK+1]*dd1;
+
+	var.Ekr[site][patch] = var.RTonF*log(var.u[22][site][patch]/var.u[17][site][patch]);
+	var.gkr = 0.02614*sqrt(var.u[22][site][patch]/5.4);
+
+	var.ikr[site][patch] = var.ikrf[site][patch]*var.gkr*var.u[11][site][patch]*var.r*(var.u[0][site][patch]-var.Ekr[site][patch]);
+
+}
+
+// Slowly Activating Potassium Current 
+inline void comp_iks (int site, int patch)
+{
+
+	MKL_INT iV=0;
+	double V1,V2,d1,d2;
+	double gks;
+
+	V1 = (var.u[0][site][patch]+200)*dvm;
+	V2 = (int)V1;
+	d1 = V1-V2;
+	d2 = 1.0-d1;
+	iV = (int)V2;
+
+	var.xs1ss = var.Txs1ss[iV]*d2 + var.Txs1ss[iV+1]*d1;
+	var.xs2ss = var.xs1ss;
+	var.tauxs1 = var.Ttauxs1[iV]*d2 + var.Ttauxs1[iV+1]*d1;
+	var.tauxs2 = 4.0*var.tauxs1;
+
+	var.Eks[site][patch] = ((R*T)/F)*log((var.u[22][site][patch]+var.prnak*var.u[21][site][patch])/(var.u[17][site][patch]+var.prnak*var.u[16][site][patch]));
+
+	gks = 1.0+0.6/(1.0+pow((0.000038/var.u[18][site][patch]),1.4));
+
+	var.iks[site][patch] = var.iksf[site][patch]*0.433*gks*var.u[12][site][patch]*var.u[13][site][patch]*(var.u[0][site][patch]-var.Eks[site][patch]);
+
+}
+
+// Plateau Potassium Current
+inline void comp_ikp (int site, int patch)
+{
+
+	double kp;
+	MKL_INT iV=0;
+	double V1,V2,d1,d2;
+	V1 = (var.u[0][site][patch]+200)*dvm;
+	V2 = (int)V1;
+	d1 = V1-V2;
+	d2 = 1.0-d1;
+	iV = (int)V2;
+
+	//var.Ekp[site][patch] = var.Ekr[site][patch];
+
+	kp = var.Tkp[iV]*d2 + var.Tkp[iV+1]*d1;
+	
+	var.ikp[site][patch] = var.ikxf[site][patch]*0.02*kp*(var.u[0][site][patch]-var.Ekr[site][patch]);
+
+}
+
+// Ito Transient Outward Current
+// Dumaine et al. Circ Res 1999;85:803-809
+inline void comp_ito (int site, int patch)
+{
+
+	MKL_INT iV=0;
+	double V1,V2,d1,d2;
+
+	V1 = (var.u[0][site][patch]+200)*dvm;
+	V2 = (int)V1;
+	d1 = V1-V2;
+	d2 = 1.0-d1;
+	iV = (int)V2;
+
+	var.rvdv = var.Trvdv[iV]*d2 + var.Trvdv[iV+1]*d1;
+	var.azdv = var.Tazdv[iV]*d2 + var.Tazdv[iV+1]*d1;
+	var.bzdv = var.Tbzdv[iV]*d2 + var.Tbzdv[iV+1]*d1;
+	var.aydv = var.Taydv[iV]*d2 + var.Taydv[iV+1]*d1;
+	var.bydv = var.Tbydv[iV]*d2 + var.Tbydv[iV+1]*d1;
+
+	//var.Ekdv[site][patch] = var.Ekr[site][patch];
+
+	var.ito[site][patch] = var.itof[site][patch]*0.5
+			*var.u[14][site][patch]*var.u[14][site][patch]*var.u[14][site][patch]
+			*var.u[15][site][patch]*var.rvdv*(var.u[0][site][patch]-var.Ekr[site][patch]);
+
+}
+
+// Sodium-Calcium Exchanger V-S
+inline void comp_inaca (int site, int patch)
+{
+
+	MKL_INT iV=0;
+	double V1,V2,d1,d2;
+	double exp2,exp3; 
+
+	V1 = (var.u[0][site][patch]+200)*dvm;
+	V2 = (int)V1;
+	d1 = V1-V2;
+	d2 = 1.0-d1;
+	iV = (int)V2;
+
+	exp2=var.Texp2[iV]*d2 + var.Texp2[iV+1]*d1;
+	exp3=var.Texp3[iV]*d2 + var.Texp3[iV+1]*d1;
+
+    var.inaca[site][patch] = var.c1*exp2*((exp3*var.u[16][site][patch]*var.u[16][site][patch]*var.u[16][site][patch]*var.u[23][site][patch]
+				-var.u[21][site][patch]*var.u[21][site][patch]*var.u[21][site][patch]*var.u[18][site][patch])/(1.0+var.c2*exp2*
+				(exp3*var.u[16][site][patch]*var.u[16][site][patch]*var.u[16][site][patch]*var.u[23][site][patch]+var.u[21][site][patch]*var.u[21][site][patch]*var.u[21][site][patch]*var.u[18][site][patch])));
+
+}
+
+// Sodium-Potassium Pump NaK ATPase
+inline void comp_inak (int site, int patch)
+{
+
+	MKL_INT iV=0,iNa=0;
+	double V1,V2,d1,d2;
+	double Na1,Na2,k1,k2;
+	double exp0,exp1,tab_nak; 
+
+	V1 = (var.u[0][site][patch]+200)*dvm;
+	V2 = (int)V1;
+	d1 = V1-V2;
+	d2 = 1.0-d1;
+	iV = (int)V2;
+
+	exp0=var.Texp0[iV]*d2 + var.Texp0[iV+1]*d1;
+	exp1=var.Texp1[iV]*d2 + var.Texp1[iV+1]*d1;
+
+	//Na1 = (var.u[16][site][patch])*dvm;
+	//Na2 = (int)Na1;
+	//k1 = Na1-Na2;
+	//k2 = 1.0-k1;
+	//iNa = (int)Na2;
+	
+	var.sigma = (exp(var.u[21][site][patch]/67.3)-1.0)/7.0;
+	var.fnak = 1.0/(exp0+0.0365*var.sigma*exp1);
+	//tab_nak = var.Tnak[iNa]*k2 + var.Tnak[iNa+1]*k1;
+	tab_nak = 1.0/(1.0+pow(var.kmnai/var.u[16][site][patch],2.0));
+
+	var.inak[site][patch] = var.ibarnak*var.fnak*tab_nak*(var.u[22][site][patch]/(var.u[22][site][patch]+var.kmko));
+
+}
+
+// Sarcolemmal Ca Pump 
+inline void comp_ipca (int site, int patch)
+{
+
+	var.ipca[site][patch] = (var.ibarpca*var.u[18][site][patch])/(var.kmpca+var.u[18][site][patch]);
+
+}
+
+// Ca Background Current 
+inline void comp_icab (int site, int patch)
+{
+
+	var.Ecan[site][patch] = (var.RTonF/var.zca)*log(var.u[23][site][patch]/var.u[18][site][patch]); // = Eca;
+
+	var.icab[site][patch] = var.gcab*(var.u[0][site][patch]-var.Ecan[site][patch]);
+
+}
+
+// Na Background Current 
+inline void comp_inab (int site, int patch)
+{
+
+	//var.Enan[site][patch] = var.Ena[site][patch];
+
+	var.inab[site][patch] = var.gnab*(var.u[0][site][patch] - var.Ena[site][patch]);
+
+}
+
+// X-L Du et al, J.Mol.Cell.Cardiol, 35,293-300, 2003
+inline void comp_ikur (int site, int patch)
+{
+    var.ikur[site][patch] = 0;
+}
+
+// Na-Activated K Channel 
+inline void comp_ikna (int site, int patch)
+{
+
+	//double pona,pov;
+
+	//var.Ekna[site][patch] = var.Ekr[site][patch];
+
+	//pona = 0.85/(1.0 + pow((var.kdkna/var.u[16][site][patch]),2.8));
+	//pov = 0.8-0.65/(1.0 + exp((var.u[0][site][patch]+125.0)/15.0));
+	
+	var.ikna[site][patch] = 0.0;
+}
+
+// ATP-Sensitive K Channel
+// Note: If you wish to use this current in your simulations,
+// there are additional changes which must be made to the code 
+// as detailed in Cardiovasc Res 1997;35:256-272 
+// [K]o = x[22] extracellular K ion concentration
+
+inline void comp_ikatp (int site, int patch)
+{
+
+	//var.Ekatp[site][patch] = var.Ekr[site][patch];
+
+	//var.gkatp = 0.000195/var.nicholsarea;
+	//var.patp = 1.0/(1.0+(pow((var.atpi/var.katp),var.hatp)));
+	//var.gkbaratp = var.gkatp*var.patp*(pow((var.u[22][site][patch]/4.0),var.natp));
+
+	var.ikatp[site][patch] = 0.0;
+
+}
+
+/* Nonspecific Ca-activated Current */
+inline void comp_insca (int site, int patch)
+{
+
+	var.ibarnsna = 0.0;
+	var.ibarnsk = 0.0;
+
+	var.insna[site][patch] = 0.0;
+	var.insk[site][patch] = 0.0;
+
+}
+
+// The units of dnai is in mM.  Note that naiont should be multiplied by the
+// cell capacitance to get the correct units.  Since cell capacitance = 1 uF/cm^2,
+// it doesn't explicitly appear in the equation below.
+// This holds true for the calculation of dki and dcai.
+
+// Na concentration dose not use a function.
+// K concentration dose not use a function.
+inline void comp_iconcent (int site, int patch)
+{
+
+	conc_nsr(site,patch);
+	conc_jsr(site,patch);
+	conc_itr(site,patch);
+	conc_cai(site,patch);
+
+}
+
+inline void conc_nsr (int site, int patch)
+{
+
+	double kleak;
+
+	kleak = var.iupbar/var.nsrbar;
+	var.ileak[site][patch] = kleak*var.u[19][site][patch];
+
+	var.iup[site][patch] = var.iupbar*var.u[18][site][patch]/(var.u[18][site][patch]+var.kmup);
+
+}
+
+inline void conc_jsr (int site, int patch)
+{
+
+	MKL_INT iTc=0,iTo=0;
+	double Tc1,Tc2,dc1,dc2;
+	//double To1,To2,do1,do2;
+	double magrel;
+	double on,off;
+	double greljsrol;
+	double fexp,f_ol;
+
+	var.dICa_total_new[site][patch] = (var.ICa_total[site][patch] - var.ICa_total_old[site][patch])/var.dt;
+
+	if( var.u[0][site][patch] > -35.0 
+		&& var.dICa_total_new[site][patch] < var.dICa_total[site][patch] && var.boolien[site][patch] == 0){
+			var.boolien[site][patch] = 1;
+			var.t_cicr[site][patch] = 0;
+	}
+
+	Tc1 = var.t_cicr[site][patch]*var.m;
+	Tc2 = (int)Tc1;
+	dc1 = Tc1-Tc2;
+	dc2 = 1.0-dc1;
+	iTc = (int)Tc2;
+
+	fexp=var.Tc[iTc]*dc2 + var.Tc[iTc+1]*dc1;
+	on = 1.0/(1.0+fexp);
+	off = (1.0-1.0/(1.0+fexp));
+
+	magrel = 1.0/(1.0+exp(((var.ICa_total[site][patch])+5.0)/0.9));
+
+	var.Irel_cicr[site][patch] = var.gmaxrel*on*off*magrel*(var.u[20][site][patch]-var.u[18][site][patch]);
+	
+	var.t_cicr[site][patch] += var.dt;
+
+	//To1 = var.t_overload[site][patch]*var.m;
+	//To2 = (int)To1;
+	//do1 = To1-To2;
+	//do2 = 1.0-do1;
+	//iTo = (int)To2;
+	//f_ol=var.Tol[iTo]*do2 + var.Tol[iTo+1]*do1;
+
+	if(var.grelbarjsrol=!0){
+		f_ol=(1.0-exp(-var.t_overload[site][patch]/var.tauon))*exp(-var.t_overload[site][patch]/var.tauoff);
+		var.Irel_jsr_overload[site][patch] = var.grelbarjsrol*f_ol*(var.u[20][site][patch]-var.u[18][site][patch]);
+		var.t_overload[site][patch] += var.dt;
+	} else {
+		var.Irel_jsr_overload[site][patch] = 0;
+		var.t_overload[site][patch] += 0;
+	}
+
+	var.csqn[site][patch] = var.csqnbar*(var.u[20][site][patch]/(var.u[20][site][patch] + var.kmcsqn));
+
+}
+
+inline void conc_itr (int site, int patch)
+{
+	var.itr[site][patch] = (var.u[19][site][patch]-var.u[20][site][patch])/var.tautr; 
+}
+
+inline void conc_cai (int site, int patch)
+{
+
+	var.trpn[site][patch] = var.trpnbar*(var.u[18][site][patch]/(var.u[18][site][patch]+var.kmtrpn));
+	var.cmdn[site][patch] = var.cmdnbar*(var.u[18][site][patch]/(var.u[18][site][patch]+var.kmcmdn));
+
+}
+
+inline void comp_iconcent2 (int site, int patch)
+{
+// Update Ca_JSR concentration x[20] = [Ca]_JSR
+	var.bjsr[site][patch] = var.csqnbar - var.csqn[site][patch] - var.u[20][site][patch] + var.kmcsqn;
+	var.cjsr[site][patch] = var.kmcsqn*(var.csqn[site][patch] + var.u[20][site][patch]);
+	var.u[20][site][patch] = (sqrt(var.bjsr[site][patch]*var.bjsr[site][patch]+4.0*var.cjsr[site][patch])-var.bjsr[site][patch])/2.0;
+
+// Update intracellular Ca concentration x[18] = [Ca]_i
+
+	var.Ca_total[site][patch] = var.trpn[site][patch]+var.cmdn[site][patch]+var.u[18][site][patch];
+	var.bmyo[site][patch] = var.cmdnbar+var.trpnbar+var.kmtrpn+var.kmcmdn-var.Ca_total[site][patch];
+	var.cmyo[site][patch] = (var.kmcmdn*var.kmtrpn)-(var.Ca_total[site][patch]*(var.kmtrpn+var.kmcmdn))+(var.trpnbar*var.kmcmdn)+(var.cmdnbar*var.kmtrpn);
+	var.dmyo[site][patch] = -var.kmtrpn*var.kmcmdn*var.Ca_total[site][patch];
+	var.gpig = sqrt(var.bmyo[site][patch]*var.bmyo[site][patch]-3.0*var.cmyo[site][patch]);
+
+	var.u[18][site][patch] = (2.0*var.gpig/3.0)*cos(acos((9.0*var.bmyo[site][patch]*var.cmyo[site][patch]
+			-2.0*var.bmyo[site][patch]*var.bmyo[site][patch]*var.bmyo[site][patch]-27.0*var.dmyo[site][patch])/
+			(2.0*pow((var.bmyo[site][patch]*var.bmyo[site][patch]-3.0*var.cmyo[site][patch]),1.5)))/3.0)-(var.bmyo[site][patch]/3.0);
+
+}
+
+
+

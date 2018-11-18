@@ -1,0 +1,111 @@
+
+/* Simulation cases for methods to localize Na channel */
+// case:1  homogeneous myofiber with heterogeneous NaCh distribution
+// case:2  homogeneous myofiber with uniform distribution of NaCh
+// case:3  heterogeneous myofiber with heterogeneous NaCh distribution
+// case:4  Spacial case of heterogeneous myofiber with heterogeneous NaCh distribution
+1
+
+// If the distribution of Na channel at surface membrane is heterogenenous,
+// then Na channel density ratio is described as follows: JM unit: LM unit.
+// JM ratio1
+0.5
+
+// LM ratio1
+0.15
+
+// JM ratio2
+0.0
+
+// LM ratio2
+0.0
+
+// Vm steady state shift 
+-7.0
+
+// Radius of the cell (cm)
+0.0011
+
+// Length of the cell (cm)
+0.01
+
+/* Intracellular resistance (Endo site) Rmyo1 [Ohm cm] */
+150
+
+/* Gap junction conductance in Endo region = 2.5 [uS] -> S/gj = [Ohm cm^2] */
+/* resistance for Gap junction [Ohm cm^2] */
+150
+
+/* Cleft resistivity [Ohm cm] */
+4E+6
+
+// cleft width
+15.0e-07
+
+/* Base cycle length */
+400
+
+/* Istim */
+-300.0	
+//-300
+
+/* Simulation ceses for the fiber with the different number of Endo, M, Epi cells */
+// case:1 Only Endo cell
+// case:2 Only M cell
+// case:3 Only Epi cell
+// case:4 Endo cell-M cell fiber(50%:50%)
+// case:5 M cell-Epi cell fiber(50%:50%)
+// case:6 Epi cell-Endo cell fiber(50%:50%)
+// case:7 Endo cell-M cell-Epi cell fiber(33%:33%:33%)
+3
+
+/* number of datas */
+1
+
+/* x1, y1 */
+-89.0        // Vm  = x[0]
+0.0008       // m   = x[1]
+0.993771     // h   = x[2]
+0.995727     // j   = x[3]
+3.210618e-06 // d   = x[4]
+1.0          //f1_fast = x[5]
+1.0          //f2_slow = x[6]
+1.0          //fca1_CDI_fast = x[7]
+1.0          //fca2_CDI_slow = x[8]
+0.000970231  // b   = x[9]
+0.994305     // g   = x[10]
+0.000124042  // xr  = x[11]
+0.00445683   // xs1 = x[12]
+0.00445683   // xs2 = x[13]
+0.0120892    // zdv = x[14]
+0.999978     // ydv = x[15]
+12.1     // Initial Intracellular Na (mM) = x[16]
+141.2    // Initial Intracellular K (mM)  = x[17]
+0.00006  // Initial Intracellular Ca (mM) = x[18]
+1.838    // [Ca]_NSR = x[19]
+1.838    // [Ca]_JSR = x[20]
+140.0    // Initial Bulk Medium [Na] (mM) = x[21]
+4.5      // Initial Bulk Medium [K]  (mM) = x[22]
+1.8      // Initial Bulk Medium [Ca] (mM) = x[23]
+
+
+/* direction of time */
+1
+
+/* end time. 0.0 = nolimit of integration */ 
+0
+
+/* Decrease rate of the gap junctiotion resistance (For test)*/
+1
+
+/* inner current scale factor (For test) */
+/* but now, this parameter is not used. */
+1.0
+
+///* strength rate of IcaL */
+0.5
+
+
+1		/* number of period */
+500	/* strip for integral */
+0		/* write file 0 --- not write/1 --- write */
